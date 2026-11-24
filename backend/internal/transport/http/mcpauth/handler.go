@@ -4,6 +4,7 @@ import (
 	"errors"
 	"html/template"
 	"net/http"
+	"net/url"
 	"strings"
 
 	mcpauthapp "github.com/chenyme/grok2api/backend/internal/application/mcpauth"
@@ -126,7 +127,9 @@ func (h *Handler) authorizeGET(c *gin.Context) {
 	}
 	http.SetCookie(c.Writer, &http.Cookie{Name: csrfCookie, Value: auth.CSRF, HttpOnly: true, Secure: strings.HasPrefix(h.base(), "https://"), SameSite: http.SameSiteLaxMode, MaxAge: 600})
 	c.Header("Cache-Control", "no-store")
-	c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; base-uri 'none'; frame-ancestors 'none'")
+	redirectURL, _ := url.Parse(q.Get("redirect_uri"))
+	// Chrome also checks form-action against the cross-origin OAuth redirect.
+	c.Header("Content-Security-Policy", "default-src 'none'; style-src 'unsafe-inline'; form-action 'self' "+redirectURL.Scheme+"://"+redirectURL.Host+"; base-uri 'none'; frame-ancestors 'none'")
 	c.Header("X-Frame-Options", "DENY")
 	c.Header("Content-Type", "text/html; charset=utf-8")
 	_ = consentTemplate.Execute(c.Writer, gin.H{"ID": auth.ID, "Client": auth.ClientName})

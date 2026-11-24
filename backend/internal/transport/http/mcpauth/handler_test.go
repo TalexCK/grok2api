@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"net/url"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -43,7 +44,7 @@ func TestDiscoveryRegistrationAndConsentPage(t *testing.T) {
 		t.Fatalf("unexpected discovery: %d %s", response.Code, response.Body.String())
 	}
 
-	body := `{"client_name":"测试客户端","redirect_uris":["https://client.example/callback"],"token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"],"response_types":["code"]}`
+	body := `{"client_name":"测试客户端","redirect_uris":["https://client.example/callback?next=https%3A%2F%2Fevil.example%2F"],"token_endpoint_auth_method":"none","grant_types":["authorization_code","refresh_token"],"response_types":["code"]}`
 	request = httptest.NewRequest(http.MethodPost, "/oauth/register", strings.NewReader(body))
 	request.Header.Set("Content-Type", "application/json")
 	response = httptest.NewRecorder()
@@ -60,7 +61,7 @@ func TestDiscoveryRegistrationAndConsentPage(t *testing.T) {
 
 	query := url.Values{
 		"response_type": {"code"}, "client_id": {registered.ClientID},
-		"redirect_uri": {"https://client.example/callback"}, "state": {"state"},
+		"redirect_uri": {"https://client.example/callback?next=https%3A%2F%2Fevil.example%2F"}, "state": {"state"},
 		"code_challenge":        {"abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_"},
 		"code_challenge_method": {"S256"}, "resource": {"https://api.example/prefix/mcp"}, "scope": {"search"},
 	}
@@ -73,8 +74,20 @@ func TestDiscoveryRegistrationAndConsentPage(t *testing.T) {
 	if !strings.Contains(response.Body.String(), `type="password"`) || !strings.Contains(response.Body.String(), `value="deny"`) {
 		t.Fatalf("consent controls missing: %s", response.Body.String())
 	}
+	_, sources, found := strings.Cut(response.Header().Get("Content-Security-Policy"), "form-action ")
+	sources, _, _ = strings.Cut(sources, ";")
+	if !found || !slices.Equal(strings.Fields(sources), []string{"'self'", "https://client.example"}) {
+		t.Fatalf("OAuth redirect is blocked or an unrelated origin is allowed: %q", sources)
+	}
 	cookies := response.Result().Cookies()
 	if len(cookies) != 1 || !cookies[0].HttpOnly || !cookies[0].Secure {
 		t.Fatalf("CSRF cookie is not secure: %#v", cookies)
+	}
+	query.Set("redirect_uri", "https://attacker.example/callback")
+	request = httptest.NewRequest(http.MethodGet, "/oauth/authorize?"+query.Encode(), nil)
+	response = httptest.NewRecorder()
+	router.ServeHTTP(response, request)
+	if response.Code != http.StatusBadRequest {
+		t.Fatalf("unregistered callback accepted: %d", response.Code)
 	}
 }

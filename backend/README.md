@@ -79,6 +79,8 @@ PostgreSQL DSN 也可通过非空的 `GROK2API_DATABASE_URL` 注入；它的优�
 
 OAuth 使用授权码、PKCE S256、短期 access token 和轮换 refresh token。授权状态存入关系型数据库，Client Key 加密保存，每次调用继续校验原 Key 的启用状态、有效期、模型权限、额度、RPM 与并发限制，并复用原有请求审计；禁用或删除 Client Key 可停止该授权访问。OAuth 令牌只能用于 `/mcp`，不能调用 `/v1` 或管理 API。请使用专用、限权限额的 Client Key；查询内容会发送给 Grok，回复也会传给 ChatGPT。
 
+授权页的 CSP 仅允许本站与已注册的回调来源，避免 Chrome 拦截提交后的跨域 OAuth 跳转；反向代理不要额外叠加仅含 `form-action 'self'` 的 CSP。若旧版本曾显示验证成功但没有跳转，请更新服务后从 ChatGPT 重新开始授权，不要重复提交已经消费的一次性授权页。
+
 本地 HTTP 仅适合开发；ChatGPT 远程连接需使用公开 HTTPS（或自行配置受支持的安全隧道）。本项目不自动发布插件、不自动确认 ChatGPT 的风险提示，也不代理 Grok 账号登录。
 
 ## 代码结构
