@@ -42,6 +42,9 @@ bootstrapAdmin:
 frontend:
   # [通常不要修改] Go 服务同源托管的前端构建目录。
   staticPath: "./frontend/dist"
+  # [按需修改] ChatGPT MCP/OAuth 与插件 ZIP 使用此公开地址；生产环境必须是可访问的 HTTPS。
+  # 管理端保存的「公开 API 地址」优先于本字段。
+  publicApiBaseURL: "http://127.0.0.1:8000"
 
 database:
   # [按需修改] 单实例使用 sqlite；多实例改为 postgres。

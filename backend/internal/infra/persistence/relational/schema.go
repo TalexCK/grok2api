@@ -54,6 +54,11 @@ var schemaModels = []any{
 	&mediaAssetModel{},
 	&mediaUploadTicketModel{},
 	&runtimeSettingsModel{},
+	&mcpOAuthClientModel{},
+	&mcpOAuthTransactionModel{},
+	&mcpOAuthCodeModel{},
+	&mcpOAuthFamilyModel{},
+	&mcpOAuthTokenModel{},
 }
 
 var schemaIndexes = []string{
@@ -115,6 +120,10 @@ var schemaIndexes = []string{
 	"CREATE INDEX IF NOT EXISTS idx_media_jobs_result_asset ON media_jobs(result_asset_id) WHERE result_asset_id <> ''",
 	// Pending input metadata rows only; keeps startup backfill scans off the full table after migration completes.
 	mediaJobInputMetadataPendingIndex,
+	"CREATE INDEX IF NOT EXISTS idx_mcp_oauth_transactions_expiry ON mcp_oauth_transactions(expires_at)",
+	"CREATE INDEX IF NOT EXISTS idx_mcp_oauth_codes_expiry ON mcp_oauth_codes(expires_at)",
+	"CREATE INDEX IF NOT EXISTS idx_mcp_oauth_tokens_expiry ON mcp_oauth_tokens(expires_at)",
+	"CREATE INDEX IF NOT EXISTS idx_mcp_oauth_tokens_family ON mcp_oauth_tokens(family_id)",
 }
 
 // InitializeSchema 以当前持久化模型作为首版数据库结构基线。

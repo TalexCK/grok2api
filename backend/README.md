@@ -53,11 +53,33 @@ PostgreSQL DSN 也可通过非空的 `GROK2API_DATABASE_URL` 注入；它的优�
 - `/api/admin/v1/*`：管理 API
 - `/healthz`、`/readyz`：健康与就绪探针
 - `/swagger/index.html`：公开 API Swagger，仅在 `server.swaggerEnabled: true` 时注册
+- `/mcp`：供 ChatGPT Web 使用的 Streamable HTTP MCP，仅提供 `search(search_prompt)`
+- `/mcp/plugin.zip`：动态生成带当前公开地址的 OpenAI 插件 ZIP，不包含凭据
+- `/.well-known/oauth-*`、`/oauth/*`：MCP OAuth 发现、授权、令牌与撤销接口
 - `frontend.staticPath`：前端静态目录，默认 `./frontend/dist`
 
 详细协议说明见 [`docs`](./docs)。
 
 修改公开接口注释后，在仓库根目录执行 `make swagger` 更新 `backend/docs/docs.go`、`swagger.json` 与 `swagger.yaml`。生产配置应保持 `server.swaggerEnabled: false`。
+
+## ChatGPT Web MCP
+
+1. 在管理端导入可用的 Grok Web SSO 账号，启用 `grok-chat-fast`，创建有权调用该模型的 Client Key。MCP 固定使用 Web fast，不经过公开模型别名，也不会回退到 Build、Console 或其他模型。
+2. 将服务部署到可从 ChatGPT 访问的 HTTPS 地址，在管理端设置「公开 API 地址」为该地址（或通过 `frontend.publicApiBaseURL` 启动配置设置）。反向代理须转发 `/mcp`、`/oauth/*` 和 `/.well-known/*`；不要缓冲或截断长时间运行的 MCP POST。
+3. 在 [ChatGPT Plugins](https://chatgpt.com/plugins) 添加自定义 MCP server，URL 填 `https://你的域名/mcp`，认证选择 OAuth（Dynamic Client Registration）。在跳转到本服务的授权页中输入 Client Key，确认仅授予 `search` 权限。Client Key 只提交给本服务，不会交给 ChatGPT。
+4. 如果需要插件包，下载 `https://你的域名/mcp/plugin.zip`。ZIP 根目录包含 `plugin.json` 和 `mcp.json`，自动使用已配置的公开地址；修改域名后需重新下载。可按 [OpenAI 插件打包与安装指南](https://developers.openai.com/plugins/build/plugins)使用，公开目录上传入口为 [Plugins](https://platform.openai.com/plugins)。ZIP 不包含服务端程序，不能替代已部署的 MCP。
+
+唯一工具：
+
+```json
+{"name":"search","arguments":{"search_prompt":"需要交给 Grok 的完整问题"}}
+```
+
+`search_prompt` 原样作为一条 user 消息发送给 Grok Web fast，等待完整回复后返回 MCP 文本结果。工具名不代表强制联网搜索；是否检索由 Grok 自身决定。输入也不会被追加系统提示或转换成 `search`/`fetch` 文档协议。
+
+OAuth 使用授权码、PKCE S256、短期 access token 和轮换 refresh token。授权状态存入关系型数据库，Client Key 加密保存，每次调用继续校验原 Key 的启用状态、有效期、模型权限、额度、RPM 与并发限制，并复用原有请求审计；禁用或删除 Client Key 可停止该授权访问。OAuth 令牌只能用于 `/mcp`，不能调用 `/v1` 或管理 API。请使用专用、限权限额的 Client Key；查询内容会发送给 Grok，回复也会传给 ChatGPT。
+
+本地 HTTP 仅适合开发；ChatGPT 远程连接需使用公开 HTTPS（或自行配置受支持的安全隧道）。本项目不自动发布插件、不自动确认 ChatGPT 的风险提示，也不代理 Grok 账号登录。
 
 ## 代码结构
 

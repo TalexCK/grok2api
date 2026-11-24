@@ -121,6 +121,8 @@ type Input struct {
 	// auditOperation may classify a normal protocol request differently for
 	// operator visibility without changing routing or Provider semantics.
 	auditOperation audit.Operation
+	// modelRoute pins trusted internal calls without going through public aliases.
+	modelRoute *modeldomain.Route
 	// skipQualityHold is set only by trusted gateway-side request classifiers.
 	skipQualityHold bool
 	// ForcedEgressNodeID is an internal-only administrator probe constraint.
@@ -856,7 +858,14 @@ func (s *Service) createResponseAt(ctx context.Context, input Input, path string
 	if input.auditOperation != "" {
 		auditOperation = input.auditOperation
 	}
-	routes, aliasEffort, err := s.resolvePublicModelRoutes(ctx, input.PublicModel, input.ClientKey.AllowModelAliases)
+	var routes []modeldomain.Route
+	var aliasEffort string
+	var err error
+	if input.modelRoute != nil {
+		routes = []modeldomain.Route{*input.modelRoute}
+	} else {
+		routes, aliasEffort, err = s.resolvePublicModelRoutes(ctx, input.PublicModel, input.ClientKey.AllowModelAliases)
+	}
 	if err != nil {
 		return nil, ErrModelNotFound
 	}

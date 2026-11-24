@@ -22,6 +22,7 @@ import (
 	egressapp "github.com/chenyme/grok2api/backend/internal/application/egress"
 	"github.com/chenyme/grok2api/backend/internal/application/gateway"
 	invalidationapp "github.com/chenyme/grok2api/backend/internal/application/invalidation"
+	mcpauthapp "github.com/chenyme/grok2api/backend/internal/application/mcpauth"
 	mediaapp "github.com/chenyme/grok2api/backend/internal/application/media"
 	modelapp "github.com/chenyme/grok2api/backend/internal/application/model"
 	quotarecoveryapp "github.com/chenyme/grok2api/backend/internal/application/quotarecovery"
@@ -436,7 +437,8 @@ func New(ctx context.Context, cfg config.Config, logger *slog.Logger) (*Applicat
 			MaxOutputTokens: cfg.QualityGuard.MaxOutputTokens,
 		}
 	}
-	router := httpserver.New(httpserver.Dependencies{Logger: logger, RequestTimeout: cfg.Server.RequestTimeout.Value(), MaxBodyBytes: cfg.Server.MaxBodyBytes, TrustedProxies: cfg.Server.TrustedProxies, ConcurrencyGate: inferenceConcurrency, SecureCookies: cfg.Auth.SecureCookies, SwaggerEnabled: cfg.Server.SwaggerEnabled, PublicAPIBaseURL: cfg.Frontend.EffectivePublicAPIBaseURL(), FrontendStaticPath: cfg.Frontend.StaticPath, Readiness: readiness, TrafficReady: startup.acceptsTraffic, AdminAuth: adminService, Accounts: accountService, AccountSync: accountSyncService, Models: modelService, ClientKeys: clientKeyService, Audits: auditService, Dashboard: dashboardService, Gateway: gatewayService, Media: mediaService, Settings: settingsService, Egress: egressService, QualityGuardStatePath: qualityGuardPath("state.json"), QualityGuardConfigPath: qualityGuardPath("runtime-config.json"), QualityGuardToken: qualityGuardToken, QualityGuardProbe: qualityGuardProbe, Updates: updateService})
+	mcpOAuth := mcpauthapp.NewService(relational.NewMCPOAuthRepository(database), clientKeyService, cipher, rateLimiter)
+	router := httpserver.New(httpserver.Dependencies{Logger: logger, RequestTimeout: cfg.Server.RequestTimeout.Value(), MaxBodyBytes: cfg.Server.MaxBodyBytes, TrustedProxies: cfg.Server.TrustedProxies, ConcurrencyGate: inferenceConcurrency, SecureCookies: cfg.Auth.SecureCookies, SwaggerEnabled: cfg.Server.SwaggerEnabled, PublicAPIBaseURL: cfg.Frontend.EffectivePublicAPIBaseURL(), FrontendStaticPath: cfg.Frontend.StaticPath, Readiness: readiness, TrafficReady: startup.acceptsTraffic, AdminAuth: adminService, Accounts: accountService, AccountSync: accountSyncService, Models: modelService, ClientKeys: clientKeyService, MCPOAuth: mcpOAuth, Audits: auditService, Dashboard: dashboardService, Gateway: gatewayService, Media: mediaService, Settings: settingsService, Egress: egressService, QualityGuardStatePath: qualityGuardPath("state.json"), QualityGuardConfigPath: qualityGuardPath("runtime-config.json"), QualityGuardToken: qualityGuardToken, QualityGuardProbe: qualityGuardProbe, Updates: updateService})
 	server := &http.Server{Addr: cfg.Server.Listen, Handler: router, ReadHeaderTimeout: 10 * time.Second, ReadTimeout: cfg.Server.ReadTimeout.Value(), IdleTimeout: 2 * time.Minute, MaxHeaderBytes: 64 << 10}
 	return &Application{
 		logger: logger, database: database, server: server,

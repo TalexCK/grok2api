@@ -15,6 +15,7 @@ import (
 	dashboardapp "github.com/chenyme/grok2api/backend/internal/application/dashboard"
 	egressapp "github.com/chenyme/grok2api/backend/internal/application/egress"
 	"github.com/chenyme/grok2api/backend/internal/application/gateway"
+	mcpauthapp "github.com/chenyme/grok2api/backend/internal/application/mcpauth"
 	mediaapp "github.com/chenyme/grok2api/backend/internal/application/media"
 	modelapp "github.com/chenyme/grok2api/backend/internal/application/model"
 	settingsapp "github.com/chenyme/grok2api/backend/internal/application/settings"
@@ -26,6 +27,8 @@ import (
 	dashboardhttp "github.com/chenyme/grok2api/backend/internal/transport/http/dashboard"
 	egresshttp "github.com/chenyme/grok2api/backend/internal/transport/http/egress"
 	"github.com/chenyme/grok2api/backend/internal/transport/http/inference"
+	mcphttp "github.com/chenyme/grok2api/backend/internal/transport/http/mcp"
+	mcpauthhttp "github.com/chenyme/grok2api/backend/internal/transport/http/mcpauth"
 	mediahttp "github.com/chenyme/grok2api/backend/internal/transport/http/media"
 	"github.com/chenyme/grok2api/backend/internal/transport/http/middleware"
 	modelhttp "github.com/chenyme/grok2api/backend/internal/transport/http/model"
@@ -55,6 +58,7 @@ type Dependencies struct {
 	AccountSync            *accountsyncapp.Service
 	Models                 *modelapp.Service
 	ClientKeys             *clientkeyapp.Service
+	MCPOAuth               *mcpauthapp.Service
 	Audits                 *auditapp.Service
 	Dashboard              *dashboardapp.Service
 	Gateway                *gateway.Service
@@ -193,6 +197,31 @@ func New(deps Dependencies) *gin.Engine {
 		inferenceHandler.SetPublicAPIBaseURLResolver(deps.Settings.PublicAPIBaseURL)
 	}
 	inferenceHandler.Register(v1)
+	if deps.MCPOAuth != nil {
+		publicURL := func() string {
+			if deps.Settings != nil {
+				return deps.Settings.PublicAPIBaseURL()
+			}
+			return deps.PublicAPIBaseURL
+		}
+		oauthHandler := mcpauthhttp.NewHandler(deps.MCPOAuth, publicURL)
+		oauthHandler.Register(router)
+		mcpHandler := mcphttp.NewHandler(inferenceHandler.Search, publicURL)
+		mcpHandler.RegisterDownload(router)
+		mcpRoutes := router.Group("/mcp")
+		mcpRoutes.Use(deps.ConcurrencyGate.Middleware())
+		if deps.TrafficReady != nil {
+			mcpRoutes.Use(func(c *gin.Context) {
+				if !deps.TrafficReady() {
+					c.AbortWithStatusJSON(http.StatusServiceUnavailable, gin.H{"error": "service_reconciling"})
+					return
+				}
+				c.Next()
+			})
+		}
+		mcpRoutes.Use(oauthHandler.Authenticate())
+		mcpHandler.Register(mcpRoutes)
+	}
 	registerFrontend(router, deps.FrontendStaticPath)
 	return router
 }

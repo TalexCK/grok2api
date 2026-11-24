@@ -313,8 +313,12 @@ Authorization: Bearer g2a_xxx_xxx
 | `POST` | `/v1/stt`、`/v1/audio/transcriptions` | 音频转录 |
 | `GET` | `/v1/stt`、`/v1/realtime` | 代理语音 WebSocket 会话 |
 | `GET` | `/v1/media/images/{asset_id}`、`/v1/media/videos/{asset_id}` | 读取归档媒体 |
+| `POST` | `/mcp` | ChatGPT Web MCP；OAuth 授权，仅提供 `search(search_prompt)`，固定调用 Grok Web fast |
+| `GET` | `/mcp/plugin.zip` | 下载使用当前公开 API 地址的 OpenAI 插件 ZIP |
 
 stored response 和 compact 取决于最终 Provider。登录管理端后可在 `/docs` 查看当前模型与调用示例；仅在 `server.swaggerEnabled: true` 时提供 Swagger。
+
+ChatGPT MCP 使用独立 OAuth 令牌，不直接接受上述客户端密钥作为 Bearer；在授权页输入 Client Key 后才能连接。部署、授权与 ZIP 安装步骤见[后端说明](./backend/README.md#chatgpt-web-mcp)。
 
 `/v1/audio/transcriptions` 支持 `json`（默认）、`verbose_json` 和 `text`。视频编辑与延长按实际路由校验 Console `grok-imagine-video`，对外模型名仍可自定义。金额计费以网关能够可靠测量的官方计价单位为准：TTS 按输入字符数预留并结算，REST 与流式 STT 按成功响应返回的实际音频时长结算。STT 时长只能在请求完成后获得，因此并发中的请求可能使有限额 Key 短暂超过金额上限。Realtime、视频编辑与延长，以及未收录官方定价的自定义路由当前记录为“未计费”，保持可调用且不消耗金额额度。
 
